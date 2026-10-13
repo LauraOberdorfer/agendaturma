@@ -1,3 +1,170 @@
+
 <ion-app>
-  <ion-router-outlet></ion-router-outlet>
+  <main class="pagina">
+    <header class="cabecalho">
+      <h1>Mural de Avisos</h1>
+      <p>Olhe as telas. Monte parecido. Não precisa pixel-perfect.</p>
+    </header>
+
+    <section class="paineis">
+
+      <!-- PRIMEIRO PAINEL: LISTA DE AVISOS -->
+      <div class="painel-container">
+        <h2 class="legenda">1 ª- LISTA</h2>
+
+        <section
+          class="painel"
+          aria-label="Lista de avisos"
+          (dragover)="permitirSoltar($event)"
+          (drop)="soltar($event, 'normais')"
+        >
+          <header class="painel-header">
+            <strong>Mural de Avisos</strong>
+            <button
+              type="button"
+              class="link-header"
+              (click)="voltar()"
+            >
+              sair
+            </button>
+          </header>
+
+          <div class="conteudo">
+            <div class="lista-avisos">
+              @for (aviso of avisos; track aviso.id) {
+                <article
+                  class="aviso"
+                  draggable="true"
+                  (dragstart)="iniciarArraste($event, aviso.id)"
+                  (dragend)="avisoArrastado = null"
+                >
+                  <div class="aviso-texto">
+                    <strong>{{ aviso.titulo }}</strong>
+                    <span [class.status-fixado]="aviso.fixado">
+                      {{ aviso.fixado ? 'fixado' : 'normal' }}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="botao-adicionar"
+                    [attr.aria-label]="aviso.fixado
+                      ? 'Desafixar ' + aviso.titulo
+                      : 'Fixar ' + aviso.titulo"
+                    (click)="fixar(aviso.id)"
+                  >
+                    {{ aviso.fixado ? '−' : '+' }}
+                  </button>
+                </article>
+              }
+            </div>
+
+            <button
+              type="button"
+              class="botao-continuar"
+              (click)="continuar()"
+            >
+              Continuar
+            </button>
+          </div>
+        </section>
+      </div>
+      <form
+        class="form-novo-aviso"
+        (submit)="$event.preventDefault(); adicionarAviso(novoAviso.value); novoAviso.value = ''"
+      >
+        <input
+          #novoAviso
+          type="text"
+          maxlength="100"
+          placeholder="Novo aviso..."
+          aria-label="Título do novo aviso"
+        >
+
+        <button type="submit" aria-label="Adicionar aviso">+</button>
+      </form>
+
+      <!-- SEGUNDO PAINEL: REGRAS E AVISOS FIXADOS -->
+      <div class="painel-container">
+        <h2 class="legenda">2 ª- REGRA</h2>
+
+        <section
+          class="painel"
+          aria-label="Avisos fixados"
+          (dragover)="permitirSoltar($event)"
+          (drop)="soltar($event, 'fixados')"
+        >
+          <header class="painel-header">
+            <strong>Mural de Avisos</strong>
+            <button
+              type="button"
+              class="link-header"
+              (click)="voltar()"
+            >
+              voltar
+            </button>
+          </header>
+
+          <div class="conteudo">
+            <div class="alerta" [class.alerta-suave]="!limiteAtingido">
+              Max. 2 avisos fixados
+            </div>
+
+            <div class="lista-fixados">
+              @for (aviso of avisosFixados; track aviso.id) {
+                <article
+                  class="aviso aviso-fixado"
+                  draggable="true"
+                  (dragstart)="iniciarArraste($event, aviso.id)"
+                  (dragend)="avisoArrastado = null"
+                >
+                  <div class="aviso-texto">
+                    <strong>{{ aviso.titulo }}</strong>
+                    <span class="etiqueta-fixado">fixado</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="botao-remover"
+                    [attr.aria-label]="'Desafixar ' + aviso.titulo"
+                    (click)="fixar(aviso.id)"
+                  >
+                    −
+                  </button>
+                </article>
+              }
+            </div>
+
+            @if (avisosFixados.length === 0) {
+              <p class="vazio">Nenhum aviso fixado.</p>
+            }
+
+            @if (limiteAtingido) {
+              <div class="alerta">
+                Desafixe um para fixar outro
+              </div>
+            } @else {
+              <div class="alerta alerta-info">
+                Você pode fixar mais
+                {{ 2 - avisosFixados.length }}
+                aviso(s)
+              </div>
+            }
+          </div>
+        </section>
+      </div>
+    </section>
+
+    @if (mensagem) {
+      <div class="mensagem" role="status" aria-live="polite">
+        {{ mensagem }}
+        <button type="button" (click)="mensagem = ''"
+          aria-label="Fechar mensagem">×</button>
+      </div>
+    }
+
+    <footer class="rodape">
+      Mural de Avisos · Ionic + Angular
+    </footer>
+  </main>
 </ion-app>
