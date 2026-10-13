@@ -1,0 +1,7 @@
+{
+  "name": "mural-avisos",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular-standalone"
+}
