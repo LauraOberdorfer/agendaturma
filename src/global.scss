@@ -1,14 +1,11 @@
-
-@import "@ionic/angular/css/core.css";
-@import "@ionic/angular/css/normalize.css";
-@import "@ionic/angular/css/structure.css";
-@import "@ionic/angular/css/typography.css";
-@import "@ionic/angular/css/display.css";
-
 :root {
-  --ion-font-family: Arial, Helvetica, sans-serif;
-  --ion-background-color: #e2e8f1;
-  --ion-text-color: #10233a;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #10233a;
+  background: #e2e8f1;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
@@ -28,11 +25,17 @@ body {
   background: #e2e8f1;
 }
 
+button,
+input {
+  font-family: inherit;
+}
+
 button {
   -webkit-tap-highlight-color: transparent;
 }
 
-button:focus-visible {
+button:focus-visible,
+input:focus-visible {
   outline: 2px solid #117891;
   outline-offset: 3px;
 }

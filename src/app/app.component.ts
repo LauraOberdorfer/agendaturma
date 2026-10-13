@@ -1,6 +1,6 @@
-
+import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
-import { IonApp } from '@ionic/angular/standalone';
+import { FormsModule } from '@angular/forms';
 
 interface Aviso {
   id: number;
@@ -11,7 +11,7 @@ interface Aviso {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [IonApp],
+  imports: [CommonModule, FormsModule],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss']
 })
@@ -25,6 +25,7 @@ export class AppComponent implements OnInit {
   ];
 
   mensagem = '';
+  novoTitulo = '';
   avisoArrastado: number | null = null;
 
   ngOnInit(): void {
@@ -32,37 +33,43 @@ export class AppComponent implements OnInit {
       const dados = localStorage.getItem('mural-avisos');
 
       if (dados) {
-        const salvos = JSON.parse(dados) as Aviso[];
+        const lista: unknown = JSON.parse(dados);
 
-        if (Array.isArray(salvos)) {
-          this.avisos = salvos.map((aviso) => ({
-            ...aviso,
-            fixado: Boolean(aviso.fixado)
-          }));
-
-          // Garante o limite mesmo se houver dados antigos inválidos.
-          let quantidade = 0;
-
-          this.avisos.forEach((aviso) => {
-            if (aviso.fixado) {
-              quantidade++;
-
-              if (quantidade > 2) {
-                aviso.fixado = false;
+        if (Array.isArray(lista)) {
+          this.avisos = lista.filter(
+            (item: unknown): item is Aviso => {
+              if (typeof item !== 'object' || item === null) {
+                return false;
               }
+
+              const aviso = item as Record<string, unknown>;
+
+              return (
+                typeof aviso['id'] === 'number' &&
+                typeof aviso['titulo'] === 'string' &&
+                typeof aviso['fixado'] === 'boolean'
+              );
             }
-          });
+          ).map((aviso) => ({ ...aviso }));
+
+          let totalFixados = 0;
+
+          for (const aviso of this.avisos) {
+            if (aviso.fixado && ++totalFixados > 2) {
+              aviso.fixado = false;
+            }
+          }
         }
       }
     } catch {
-      this.mensagem = 'Não foi possível recuperar os dados salvos.';
+      this.mensagem = 'Não foi possível recuperar os avisos salvos.';
     }
 
     this.salvar();
   }
 
-  get avisosNormais(): Aviso[] {
-    return this.avisos.filter((aviso) => !aviso.fixado);
+  trackById(_index: number, aviso: Aviso): number {
+    return aviso.id;
   }
 
   get avisosFixados(): Aviso[] {
@@ -96,16 +103,44 @@ export class AppComponent implements OnInit {
   }
 
   continuar(): void {
-    if (this.limiteAtingido) {
-      this.mensagem = 'Você pode fixar no máximo 2 avisos.';
-      return;
-    }
-
-    this.mensagem = 'Você ainda pode fixar mais avisos.';
+    this.mensagem = this.limiteAtingido
+      ? 'Você atingiu o limite de 2 avisos fixados.'
+      : `Você ainda pode fixar ${2 - this.avisosFixados.length} aviso(s).`;
   }
 
   voltar(): void {
     this.mensagem = '';
+  }
+
+  adicionarAviso(): void {
+    const titulo = this.novoTitulo.trim();
+
+    if (!titulo) {
+      this.mensagem = 'Digite o título do aviso.';
+      return;
+    }
+
+    if (titulo.length > 100) {
+      this.mensagem = 'O título pode ter no máximo 100 caracteres.';
+      return;
+    }
+
+    let id = Date.now();
+
+    while (this.avisos.some((aviso) => aviso.id === id)) {
+      id++;
+    }
+
+    this.avisos.push({ id, titulo, fixado: false });
+    this.novoTitulo = '';
+    this.mensagem = '';
+    this.salvar();
+  }
+
+  removerAviso(id: number): void {
+    this.avisos = this.avisos.filter((aviso) => aviso.id !== id);
+    this.mensagem = '';
+    this.salvar();
   }
 
   iniciarArraste(event: DragEvent, id: number): void {
@@ -125,13 +160,20 @@ export class AppComponent implements OnInit {
     }
   }
 
-  soltar(event: DragEvent, destino: 'fixados' | 'normais'): void {
+  soltar(
+    event: DragEvent,
+    destino: 'fixados' | 'normais'
+  ): void {
     event.preventDefault();
 
-    const idTexto = event.dataTransfer?.getData('text/plain');
-    const id = idTexto ? Number(idTexto) : this.avisoArrastado;
+    const textoId = event.dataTransfer?.getData('text/plain');
+    const id = textoId
+      ? Number(textoId)
+      : this.avisoArrastado;
 
-    if (id == null || !Number.isFinite(id)) return;
+    if (id === null || id === undefined || !Number.isFinite(id)) {
+      return;
+    }
 
     const aviso = this.avisos.find((item) => item.id === id);
 
@@ -145,9 +187,7 @@ export class AppComponent implements OnInit {
       }
 
       aviso.fixado = true;
-    }
-
-    if (destino === 'normais') {
+    } else if (destino === 'normais') {
       aviso.fixado = false;
     }
 
@@ -156,33 +196,12 @@ export class AppComponent implements OnInit {
     this.salvar();
   }
 
-  adicionarAviso(titulo: string): void {
-    const nome = titulo.trim();
-
-    if (!nome) {
-      this.mensagem = 'Digite o título do aviso.';
-      return;
-    }
-
-    this.avisos.push({
-      id: Date.now(),
-      titulo: nome,
-      fixado: false
-    });
-
-    this.mensagem = '';
-    this.salvar();
-  }
-
-  removerAviso(id: number): void {
-    this.avisos = this.avisos.filter((aviso) => aviso.id !== id);
-    this.mensagem = '';
-    this.salvar();
-  }
-
   private salvar(): void {
     try {
-      localStorage.setItem('mural-avisos', JSON.stringify(this.avisos));
+      localStorage.setItem(
+        'mural-avisos',
+        JSON.stringify(this.avisos)
+      );
     } catch {
       this.mensagem = 'Não foi possível salvar os dados neste navegador.';
     }
