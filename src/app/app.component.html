@@ -1,143 +1,213 @@
-
 <main class="pagina">
-  <header class="cabecalho">
-    <h1>Mural de Avisos</h1>
-  </header>
+  <section class="carregamento" *ngIf="carregando">
+    <div class="logo-tipografica">NoteAí</div>
+    <p>Conectando ao mural...</p>
+  </section>
 
-  <section class="paineis">
-    <div class="painel-container">
-      <h2 class="legenda">1 ª- LISTA</h2>
+  <section class="tela-login" *ngIf="!carregando && !usuario">
+    <div class="quadro-login">
+      <div class="logo-tipografica">NoteAí</div>
+      <p class="etiqueta">NOSSO ESPAÇO ESCOLAR</p>
 
-      <section
-        class="painel"
-        aria-label="Lista de avisos"
-        (dragover)="permitirSoltar($event)"
-        (drop)="soltar($event, 'normais')"
+      <h1>Seu mural, <span>suas ideias.</span></h1>
+      <p class="subtitulo">
+        Recados, novidades e informações da nossa comunidade escolar.
+      </p>
+
+      <div class="linha-giz"></div>
+
+      <h2>{{ modoCadastro ? 'Criar minha conta' : 'Boas-vindas!' }}</h2>
+      <p class="texto-formulario">
+        {{ modoCadastro ? 'Preencha os dados para se cadastrar.' : 'Entre para acessar o mural.' }}
+      </p>
+
+      <form (ngSubmit)="entrarOuCadastrar()">
+        <label for="email">E-mail</label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          [(ngModel)]="email"
+          autocomplete="email"
+          placeholder="voce@exemplo.com"
+          required
+        />
+
+        <label for="senha">Senha</label>
+        <input
+          id="senha"
+          name="senha"
+          type="password"
+          [(ngModel)]="senha"
+          [attr.autocomplete]="modoCadastro ? 'new-password' : 'current-password'"
+          placeholder="Mínimo de 6 caracteres"
+          minlength="6"
+          required
+        />
+
+        <ng-container *ngIf="modoCadastro">
+          <label for="confirmarSenha">Confirmar senha</label>
+          <input
+            id="confirmarSenha"
+            name="confirmarSenha"
+            type="password"
+            [(ngModel)]="confirmarSenha"
+            autocomplete="new-password"
+            placeholder="Digite a senha novamente"
+            required
+          />
+        </ng-container>
+
+        <p class="mensagem erro" *ngIf="erro" role="alert">{{ erro }}</p>
+        <p class="mensagem sucesso" *ngIf="mensagem" role="status">{{ mensagem }}</p>
+
+        <button class="botao principal" type="submit" [disabled]="enviando">
+          {{ enviando ? 'Aguarde...' : (modoCadastro ? 'Cadastrar' : 'Entrar') }}
+        </button>
+      </form>
+
+      <div class="separador"><span>ou</span></div>
+
+      <button
+        class="botao google"
+        type="button"
+        (click)="entrarComGoogle()"
+        [disabled]="enviando"
       >
-        <header class="painel-header">
-          <strong>Mural de Avisos</strong>
-          <button type="button" class="link-header" (click)="voltar()">
-            sair
-          </button>
-        </header>
+        <strong>G</strong> Continuar com Google
+      </button>
 
-        <div class="conteudo">
-          <div class="lista-avisos">
-            <article
-              class="aviso"
-              *ngFor="let aviso of avisos; trackBy: trackById"
-              draggable="true"
-              (dragstart)="iniciarArraste($event, aviso.id)"
-              (dragend)="avisoArrastado = null"
-            >
-              <div class="aviso-texto">
-                <strong>{{ aviso.titulo }}</strong>
-                <span>{{ aviso.fixado ? 'fixado' : 'normal' }}</span>
-              </div>
+      <p class="alternar">
+        {{ modoCadastro ? 'Já tem uma conta?' : 'Ainda não tem uma conta?' }}
+        <button type="button" (click)="alternarModo()" [disabled]="enviando">
+          {{ modoCadastro ? 'Fazer login' : 'Cadastrar' }}
+        </button>
+      </p>
 
-              <button
-                type="button"
-                class="botao-adicionar"
-                [attr.aria-label]="aviso.fixado
-                  ? 'Desafixar ' + aviso.titulo
-                  : 'Fixar ' + aviso.titulo"
-                (click)="fixar(aviso.id)"
-              >
-                {{ aviso.fixado ? '−' : '+' }}
-              </button>
-            </article>
-          </div>
-
-          <button
-            type="button"
-            class="botao-continuar"
-            (click)="continuar()"
-          >
-            Continuar
-          </button>
-
-          <form class="form-novo-aviso" (ngSubmit)="adicionarAviso()">
-            <input
-              type="text"
-              name="novoTitulo"
-              [(ngModel)]="novoTitulo"
-              maxlength="100"
-              placeholder="Novo aviso..."
-              aria-label="Título do novo aviso"
-              autocomplete="off"
-            />
-
-            <button type="submit" aria-label="Adicionar aviso">+</button>
-          </form>
-        </div>
-      </section>
-    </div>
-
-    <div class="painel-container">
-      <h2 class="legenda">2 ª- REGRA</h2>
-
-      <section
-        class="painel"
-        aria-label="Avisos fixados"
-        (dragover)="permitirSoltar($event)"
-        (drop)="soltar($event, 'fixados')"
-      >
-        <header class="painel-header">
-          <strong>Mural de Avisos</strong>
-          <button type="button" class="link-header" (click)="voltar()">
-            voltar
-          </button>
-        </header>
-
-        <div class="conteudo">
-          <div class="alerta">Max. 2 avisos fixados</div>
-
-          <div class="lista-fixados">
-            <article
-              class="aviso aviso-fixado"
-              *ngFor="let aviso of avisosFixados; trackBy: trackById"
-              draggable="true"
-              (dragstart)="iniciarArraste($event, aviso.id)"
-              (dragend)="avisoArrastado = null"
-            >
-              <div class="aviso-texto">
-                <strong>{{ aviso.titulo }}</strong>
-                <span class="etiqueta-fixado">fixado</span>
-              </div>
-
-              <button
-                type="button"
-                class="botao-remover"
-                [attr.aria-label]="'Desafixar ' + aviso.titulo"
-                (click)="fixar(aviso.id)"
-              >
-                −
-              </button>
-            </article>
-          </div>
-
-          <p class="vazio" *ngIf="avisosFixados.length === 0">
-            Nenhum aviso fixado.
-          </p>
-
-          <div class="alerta" *ngIf="limiteAtingido">
-            Desafixe um para fixar outro
-          </div>
-
-          <div class="alerta alerta-info" *ngIf="!limiteAtingido">
-            Você pode fixar mais {{ 2 - avisosFixados.length }} aviso(s)
-          </div>
-        </div>
-      </section>
+      <p class="rodape">Feito para a nossa comunidade escolar ✦</p>
     </div>
   </section>
 
-  <div class="mensagem" *ngIf="mensagem" role="status" aria-live="polite">
-    <span>{{ mensagem }}</span>
-    <button type="button" (click)="mensagem = ''" aria-label="Fechar">
-      ×
-    </button>
-  </div>
+  <section class="mural" *ngIf="!carregando && usuario">
+    <header class="cabecalho">
+      <div class="marca">
+        <div class="logo-tipografica pequena">NoteAí</div>
+        <div>
+          <p class="etiqueta">NOSSO ESPAÇO ESCOLAR</p>
+          <h1>Mural de <span>avisos</span></h1>
+          <p class="boas-vindas">
+            Olá, {{ usuario.displayName || usuario.email }}!
+          </p>
+        </div>
+      </div>
 
-  <footer class="rodape">·Mural de Avisos ·</footer>
+      <button class="botao-sair" type="button" (click)="sairDaConta()">
+        Sair da conta
+      </button>
+    </header>
+
+    <div class="linha-giz"></div>
+
+    <p class="mensagem erro" *ngIf="erro" role="alert">{{ erro }}</p>
+    <p class="mensagem sucesso" *ngIf="mensagem" role="status">{{ mensagem }}</p>
+
+    <section class="painel">
+      <h2>✎ Escreva no quadro</h2>
+      <p class="subtitulo">Compartilhe um recado com a comunidade.</p>
+
+      <form (ngSubmit)="adicionarAviso()">
+        <label for="tituloAviso">Título</label>
+        <input
+          id="tituloAviso"
+          name="tituloAviso"
+          [(ngModel)]="tituloAviso"
+          maxlength="100"
+          placeholder="Ex.: Reunião do grêmio"
+          required
+        />
+
+        <label for="categoriaAviso">Categoria</label>
+        <select
+          id="categoriaAviso"
+          name="categoriaAviso"
+          [(ngModel)]="categoriaAviso"
+          required
+        >
+          <option *ngFor="let categoria of categorias" [ngValue]="categoria">
+            {{ categoria }}
+          </option>
+        </select>
+
+        <label for="conteudoAviso">Conteúdo</label>
+        <textarea
+          id="conteudoAviso"
+          name="conteudoAviso"
+          [(ngModel)]="conteudoAviso"
+          rows="4"
+          maxlength="2000"
+          placeholder="Escreva seu aviso..."
+          required
+        ></textarea>
+
+        <button class="botao principal publicar" type="submit">
+          + Publicar aviso
+        </button>
+      </form>
+    </section>
+
+    <section class="secao-avisos">
+      <h2>Recados do mural</h2>
+      <p class="subtitulo">{{ avisos.length }} aviso(s) publicado(s)</p>
+
+      <div class="filtros">
+        <button
+          type="button"
+          [class.ativo]="categoriaSelecionada === 'Todas'"
+          (click)="categoriaSelecionada = 'Todas'"
+        >Todas</button>
+
+        <button
+          *ngFor="let categoria of categorias"
+          type="button"
+          [class.ativo]="categoriaSelecionada === categoria"
+          (click)="categoriaSelecionada = categoria"
+        >{{ categoria }}</button>
+      </div>
+
+      <div class="grade-avisos" *ngIf="avisosFiltrados.length; else vazio">
+        <article
+          class="cartao-aviso"
+          *ngFor="let aviso of avisosFiltrados"
+          [class.fixado]="aviso.fixado"
+        >
+          <div class="topo-aviso">
+            <span>{{ aviso.categoria }}</span>
+            <span *ngIf="aviso.fixado">✦ Fixado</span>
+          </div>
+
+          <h3>{{ aviso.titulo }}</h3>
+          <p class="conteudo-aviso">{{ aviso.conteudo }}</p>
+
+          <div class="acoes">
+            <button type="button" (click)="alternarFixado(aviso)">
+              {{ aviso.fixado ? 'Desafixar' : '✦ Fixar' }}
+            </button>
+            <button class="excluir" type="button" (click)="excluirAviso(aviso)">
+              Excluir
+            </button>
+          </div>
+        </article>
+      </div>
+
+      <ng-template #vazio>
+        <div class="mural-vazio">
+          <span>✧</span>
+          <h3>O quadro está limpinho!</h3>
+          <p>Não há avisos nesta seleção.</p>
+        </div>
+      </ng-template>
+    </section>
+
+    <footer class="rodape">Escrito com giz e espírito de comunidade ✦</footer>
+  </section>
 </main>

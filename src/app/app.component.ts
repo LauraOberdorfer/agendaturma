@@ -1,12 +1,16 @@
-import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 
-interface Aviso {
-  id: number;
-  titulo: string;
-  fixado: boolean;
-}
+import { CommonModule } from '@angular/common';
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { User } from 'firebase/auth';
+import { Unsubscribe } from 'firebase/firestore';
+
+import { FirebaseService } from './services/firebase.service';
+import {
+  Aviso,
+  CategoriaAviso,
+  CATEGORIAS_AVISO
+} from './models/aviso.models';
 
 @Component({
   selector: 'app-root',
@@ -15,195 +19,287 @@ interface Aviso {
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss']
 })
-export class AppComponent implements OnInit {
-  avisos: Aviso[] = [
-    { id: 1, titulo: 'Prova adiada', fixado: true },
-    { id: 2, titulo: 'Lista 3 no Moodle', fixado: false },
-    { id: 3, titulo: 'Reunião de pais', fixado: false },
-    { id: 4, titulo: 'Doação de sangue', fixado: true },
-    { id: 5, titulo: 'Saída antecipada', fixado: false }
-  ];
+export class AppComponent implements OnInit, OnDestroy {
+  usuario: User | null = null;
+  avisos: Aviso[] = [];
+  categorias = CATEGORIAS_AVISO;
 
+  email = '';
+  senha = '';
+  confirmarSenha = '';
+
+  modoCadastro = false;
+
+  // A tela não fica presa esperando o Firebase.
+  carregando = false;
+  enviando = false;
+
+  erro = '';
   mensagem = '';
-  novoTitulo = '';
-  avisoArrastado: number | null = null;
+
+  tituloAviso = '';
+  conteudoAviso = '';
+  categoriaAviso: CategoriaAviso = 'Avisos Gerais';
+  categoriaSelecionada: CategoriaAviso | 'Todas' = 'Todas';
+
+  private pararUsuario?: Unsubscribe;
+  private pararAvisos?: Unsubscribe;
+
+  constructor(private firebase: FirebaseService) {}
 
   ngOnInit(): void {
+    // A tela de login já fica disponível antes desta resposta.
+    this.carregando = false;
+
     try {
-      const dados = localStorage.getItem('mural-avisos');
+      this.pararUsuario = this.firebase.observarUsuario((usuario) => {
+        this.usuario = usuario;
+        this.carregando = false;
 
-      if (dados) {
-        const lista: unknown = JSON.parse(dados);
+        this.pararAvisos?.();
+        this.pararAvisos = undefined;
+        this.avisos = [];
 
-        if (Array.isArray(lista)) {
-          this.avisos = lista.filter(
-            (item: unknown): item is Aviso => {
-              if (typeof item !== 'object' || item === null) {
-                return false;
-              }
-
-              const aviso = item as Record<string, unknown>;
-
-              return (
-                typeof aviso['id'] === 'number' &&
-                typeof aviso['titulo'] === 'string' &&
-                typeof aviso['fixado'] === 'boolean'
-              );
-            }
-          ).map((aviso) => ({ ...aviso }));
-
-          let totalFixados = 0;
-
-          for (const aviso of this.avisos) {
-            if (aviso.fixado && ++totalFixados > 2) {
-              aviso.fixado = false;
-            }
-          }
+        if (!usuario) {
+          return;
         }
-      }
-    } catch {
-      this.mensagem = 'Não foi possível recuperar os avisos salvos.';
+
+        this.pararAvisos = this.firebase.observarAvisos(
+          usuario.uid,
+          (avisos) => {
+            this.avisos = avisos;
+          },
+          (erro) => {
+            console.error('Erro ao carregar avisos:', erro);
+            this.erro =
+              'Não foi possível carregar os avisos. Verifique as regras do Firestore.';
+          }
+        );
+      });
+    } catch (erro) {
+      console.error('Erro ao iniciar autenticação:', erro);
+      this.carregando = false;
+      this.erro =
+        'Falha ao iniciar o Firebase. Confira as configurações do projeto.';
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.pararUsuario?.();
+    this.pararAvisos?.();
+  }
+
+  get avisosFiltrados(): Aviso[] {
+    if (this.categoriaSelecionada === 'Todas') {
+      return this.avisos;
     }
 
-    this.salvar();
+    return this.avisos.filter(
+      aviso => aviso.categoria === this.categoriaSelecionada
+    );
   }
 
-  trackById(_index: number, aviso: Aviso): number {
-    return aviso.id;
+  get totalFixados(): number {
+    return this.avisos.filter(aviso => aviso.fixado).length;
   }
 
-  get avisosFixados(): Aviso[] {
-    return this.avisos.filter((aviso) => aviso.fixado);
+  alternarModo(): void {
+    this.modoCadastro = !this.modoCadastro;
+    this.erro = '';
+    this.mensagem = '';
+    this.senha = '';
+    this.confirmarSenha = '';
   }
 
-  get limiteAtingido(): boolean {
-    return this.avisosFixados.length >= 2;
-  }
+  async entrarOuCadastrar(): Promise<void> {
+    this.erro = '';
+    this.mensagem = '';
 
-  fixar(id: number): void {
-    const aviso = this.avisos.find((item) => item.id === id);
+    const email = this.email.trim();
 
-    if (!aviso) return;
-
-    if (aviso.fixado) {
-      aviso.fixado = false;
-      this.mensagem = '';
-      this.salvar();
+    if (!email || !this.senha) {
+      this.erro = 'Preencha o e-mail e a senha.';
       return;
     }
 
-    if (this.limiteAtingido) {
-      this.mensagem = 'Desafixe um aviso para fixar outro.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      this.erro = 'Digite um endereço de e-mail válido.';
       return;
     }
 
-    aviso.fixado = true;
-    this.mensagem = '';
-    this.salvar();
-  }
-
-  continuar(): void {
-    this.mensagem = this.limiteAtingido
-      ? 'Você atingiu o limite de 2 avisos fixados.'
-      : `Você ainda pode fixar ${2 - this.avisosFixados.length} aviso(s).`;
-  }
-
-  voltar(): void {
-    this.mensagem = '';
-  }
-
-  adicionarAviso(): void {
-    const titulo = this.novoTitulo.trim();
-
-    if (!titulo) {
-      this.mensagem = 'Digite o título do aviso.';
+    if (this.senha.length < 6) {
+      this.erro = 'A senha deve ter pelo menos 6 caracteres.';
       return;
     }
 
-    if (titulo.length > 100) {
-      this.mensagem = 'O título pode ter no máximo 100 caracteres.';
+    if (this.modoCadastro && this.senha !== this.confirmarSenha) {
+      this.erro = 'As senhas não coincidem.';
       return;
     }
 
-    let id = Date.now();
+    this.enviando = true;
 
-    while (this.avisos.some((aviso) => aviso.id === id)) {
-      id++;
-    }
-
-    this.avisos.push({ id, titulo, fixado: false });
-    this.novoTitulo = '';
-    this.mensagem = '';
-    this.salvar();
-  }
-
-  removerAviso(id: number): void {
-    this.avisos = this.avisos.filter((aviso) => aviso.id !== id);
-    this.mensagem = '';
-    this.salvar();
-  }
-
-  iniciarArraste(event: DragEvent, id: number): void {
-    this.avisoArrastado = id;
-
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', String(id));
-    }
-  }
-
-  permitirSoltar(event: DragEvent): void {
-    event.preventDefault();
-
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'move';
-    }
-  }
-
-  soltar(
-    event: DragEvent,
-    destino: 'fixados' | 'normais'
-  ): void {
-    event.preventDefault();
-
-    const textoId = event.dataTransfer?.getData('text/plain');
-    const id = textoId
-      ? Number(textoId)
-      : this.avisoArrastado;
-
-    if (id === null || id === undefined || !Number.isFinite(id)) {
-      return;
-    }
-
-    const aviso = this.avisos.find((item) => item.id === id);
-
-    if (!aviso) return;
-
-    if (destino === 'fixados' && !aviso.fixado) {
-      if (this.limiteAtingido) {
-        this.mensagem = 'Desafixe um aviso para fixar outro.';
-        this.avisoArrastado = null;
-        return;
-      }
-
-      aviso.fixado = true;
-    } else if (destino === 'normais') {
-      aviso.fixado = false;
-    }
-
-    this.avisoArrastado = null;
-    this.mensagem = '';
-    this.salvar();
-  }
-
-  private salvar(): void {
     try {
-      localStorage.setItem(
-        'mural-avisos',
-        JSON.stringify(this.avisos)
-      );
-    } catch {
-      this.mensagem = 'Não foi possível salvar os dados neste navegador.';
+      if (this.modoCadastro) {
+        await this.firebase.cadastrar(email, this.senha);
+        this.mensagem = 'Cadastro realizado com sucesso!';
+      } else {
+        await this.firebase.entrar(email, this.senha);
+      }
+
+      this.senha = '';
+      this.confirmarSenha = '';
+    } catch (erro: unknown) {
+      console.error('Erro de autenticação:', erro);
+      this.erro = this.traduzirErro(erro);
+    } finally {
+      this.enviando = false;
     }
+  }
+
+  async entrarComGoogle(): Promise<void> {
+    this.erro = '';
+    this.mensagem = '';
+    this.enviando = true;
+
+    try {
+      await this.firebase.entrarComGoogle();
+    } catch (erro: unknown) {
+      console.error('Erro ao entrar com Google:', erro);
+      this.erro = this.traduzirErro(erro);
+    } finally {
+      this.enviando = false;
+    }
+  }
+
+  async sairDaConta(): Promise<void> {
+    this.erro = '';
+
+    try {
+      await this.firebase.sairDaConta();
+      this.email = '';
+      this.senha = '';
+      this.confirmarSenha = '';
+    } catch (erro: unknown) {
+      this.erro = this.traduzirErro(erro);
+    }
+  }
+
+  async adicionarAviso(): Promise<void> {
+    this.erro = '';
+    this.mensagem = '';
+
+    if (!this.usuario) {
+      this.erro = 'Entre na sua conta para publicar avisos.';
+      return;
+    }
+
+    const titulo = this.tituloAviso.trim();
+    const conteudo = this.conteudoAviso.trim();
+
+    if (!titulo || !conteudo) {
+      this.erro = 'Preencha o título e o conteúdo do aviso.';
+      return;
+    }
+
+    try {
+      await this.firebase.adicionarAviso(this.usuario.uid, {
+        titulo,
+        conteudo,
+        categoria: this.categoriaAviso,
+        fixado: false,
+        criadoEm: Date.now()
+      });
+
+      this.tituloAviso = '';
+      this.conteudoAviso = '';
+      this.categoriaAviso = 'Avisos Gerais';
+      this.mensagem = 'Aviso publicado!';
+    } catch (erro: unknown) {
+      console.error('Erro ao publicar aviso:', erro);
+      this.erro = 'Não foi possível publicar. Confira as regras do Firestore.';
+    }
+  }
+
+  async alternarFixado(aviso: Aviso): Promise<void> {
+    if (!this.usuario) {
+      return;
+    }
+
+    const fixar = !aviso.fixado;
+
+    if (fixar && this.totalFixados >= 2) {
+      this.erro = 'Você pode fixar no máximo 2 avisos.';
+      return;
+    }
+
+    try {
+      await this.firebase.alterarFixado(
+        this.usuario.uid,
+        aviso.id,
+        fixar
+      );
+      this.erro = '';
+    } catch (erro: unknown) {
+      console.error('Erro ao fixar aviso:', erro);
+      this.erro = 'Não foi possível alterar esse aviso.';
+    }
+  }
+
+  async excluirAviso(aviso: Aviso): Promise<void> {
+    if (!this.usuario) {
+      return;
+    }
+
+    if (!confirm(`Deseja excluir "${aviso.titulo}"?`)) {
+      return;
+    }
+
+    try {
+      await this.firebase.removerAviso(
+        this.usuario.uid,
+        aviso.id
+      );
+      this.mensagem = 'Aviso excluído.';
+      this.erro = '';
+    } catch (erro: unknown) {
+      console.error('Erro ao excluir aviso:', erro);
+      this.erro = 'Não foi possível excluir esse aviso.';
+    }
+  }
+
+  private traduzirErro(erro: unknown): string {
+    const codigo =
+      (erro as { code?: string } | null)?.code ?? '';
+
+    const mensagens: Record<string, string> = {
+      'auth/invalid-email':
+        'O e-mail informado é inválido.',
+      'auth/user-not-found':
+        'Não existe uma conta com esse e-mail.',
+      'auth/wrong-password':
+        'Senha incorreta.',
+      'auth/invalid-credential':
+        'E-mail ou senha incorretos.',
+      'auth/email-already-in-use':
+        'Esse e-mail já está cadastrado. Tente fazer login.',
+      'auth/weak-password':
+        'A senha deve ter pelo menos 6 caracteres.',
+      'auth/popup-closed-by-user':
+        'A janela de login do Google foi fechada.',
+      'auth/popup-blocked':
+        'O navegador bloqueou a janela do Google.',
+      'auth/unauthorized-domain':
+        'O domínio atual não está autorizado no Firebase.',
+      'auth/network-request-failed':
+        'Falha de conexão. Verifique sua internet.',
+      'auth/too-many-requests':
+        'Muitas tentativas. Aguarde e tente novamente.',
+      'auth/operation-not-allowed':
+        'Ative o método de login nas configurações do Firebase.'
+    };
+
+    return mensagens[codigo] ??
+      `Não foi possível concluir a operação. Código: ${codigo || 'erro desconhecido'}.`;
   }
 }
